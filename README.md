@@ -104,3 +104,7 @@ Here are similar projects I'm aware of.
 * [ash2k/stager](https://github.com/ash2k/stager)
 * [icholy/killable](https://github.com/icholy/killable)
 * [tomb](https://gopkg.in/tomb.v1)
+
+## License
+
+This project is released under the MIT License. Please see the `License` file in this repository.
