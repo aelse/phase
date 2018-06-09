@@ -3,7 +3,7 @@
 Phase provides features to enable systems to perform graceful ordered shutdown.
 
 You can use Phase to help you build systems that shutdown in an ordered sequence,
-allowng you to drain connections, flush outstanding queue items and persist
+allowing you to drain connections, flush outstanding queue items and persist
 data before termination.
 
 ## Use
