@@ -32,7 +32,7 @@ func TestPhaseCancelHeirarchy(t *testing.T) {
 	p011 := p01.Next()
 
 	// At the start nothing has terminated, and set up a Cancel trigger upon context end.
-	for _, phaser := range []*phaserImpl{p0, p00, p01, p010, p011} {
+	for _, phaser := range []*Phaser{p0, p00, p01, p010, p011} {
 		assertContextAlive(t, phaser)
 		p := phaser
 		go func() {
@@ -47,17 +47,17 @@ func TestPhaseCancelHeirarchy(t *testing.T) {
 	// Allow time for goroutines to run.
 	time.Sleep(10 * time.Millisecond)
 
-	for _, ctx := range []*phaserImpl{p0, p00} {
+	for _, ctx := range []*Phaser{p0, p00} {
 		assertContextAlive(t, ctx)
 	}
-	for _, ctx := range []*phaserImpl{p01, p010, p011} {
+	for _, ctx := range []*Phaser{p01, p010, p011} {
 		assertContextFinished(t, ctx)
 	}
 
 	// Cancel p0 and everything should end.
 	p0.Cancel()
 	time.Sleep(10 * time.Millisecond)
-	for _, phaser := range []*phaserImpl{p0, p00, p01, p010, p011} {
+	for _, phaser := range []*Phaser{p0, p00, p01, p010, p011} {
 		assertContextFinished(t, phaser)
 	}
 }

@@ -17,7 +17,7 @@ func main() {
 	phaser := phase.FromContext(context.Background())
 
 	p0 := phaser.Next()
-	go func(p phase.Phaser) {
+	go func(p *phase.Phaser) {
 		fmt.Println("started p0 func")
 		p1 := p.Next()
 

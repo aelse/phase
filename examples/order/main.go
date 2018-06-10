@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	var phaser, p0, p1, p2 phase.Phaser
+	var phaser, p0, p1, p2 *phase.Phaser
 	phaser = phase.FromContext(context.Background())
 	p0 = phaser.Next()
 	p1 = p0.Next()

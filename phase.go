@@ -6,27 +6,13 @@ import (
 	"time"
 )
 
-// Phaser is a Context providing ordered shutdown.
-type Phaser interface {
-	// Phaser is a Context and may be passed to functions requiring a Context.
-	context.Context
-
-	// Next registers and returns a new child Phaser. This should be called to
-	// create a new Phaser for each downstream component that needs ordered shutdown.
-	Next() Phaser
-
-	// When the child Phaser context has finished (context semantics, the Done() channel),
-	// Cancel must be called to signal the parent and allow ordered shutdown to continue.
-	Cancel()
-}
-
-func FromContext(ctx context.Context) *phaserImpl {
-	phaser := &phaserImpl{}
+func FromContext(ctx context.Context) *Phaser {
+	phaser := &Phaser{}
 	phaser.init(ctx)
 	return phaser
 }
 
-type phaserImpl struct {
+type Phaser struct {
 	pctx       context.Context
 	ctx        context.Context
 	cancel     context.CancelFunc
@@ -38,7 +24,7 @@ type phaserImpl struct {
 	children   sync.WaitGroup
 }
 
-func (p *phaserImpl) init(ctx context.Context) {
+func (p *Phaser) init(ctx context.Context) {
 	// Keep parent context which we need for calls to Value.
 	p.pctx = ctx
 	// Create a new cancelable context for ourselves, also used for Done and Err.
@@ -63,8 +49,10 @@ func (p *phaserImpl) init(ctx context.Context) {
 	}()
 }
 
-func (p *phaserImpl) Next() Phaser {
-	phaser := &phaserImpl{}
+// Next registers and returns a new child Phaser. This should be called to
+// create a new Phaser for each downstream component that needs ordered shutdown.
+func (p *Phaser) Next() *Phaser {
+	phaser := &Phaser{}
 	phaser.init(p.chldCtx)
 	p.children.Add(1)
 	phaser.tellParent = p.children.Done
@@ -72,8 +60,9 @@ func (p *phaserImpl) Next() Phaser {
 }
 
 // Cancel triggers cancellation of the Phaser chain. This must be called when Phaser context
-// has finished, and may be called to trigger cancellation of downstream phasers.
-func (p *phaserImpl) Cancel() {
+// has finished (context semantics, the Done() channel),, and may be called to trigger
+// cancellation of downstream phasers.
+func (p *Phaser) Cancel() {
 	p.cancelOnce.Do(func() {
 		p.doCancel()
 		// Once our context is closed (after children terminate), notify parent.
@@ -87,7 +76,7 @@ func (p *phaserImpl) Cancel() {
 	})
 }
 
-func (p *phaserImpl) doCancel() {
+func (p *Phaser) doCancel() {
 	// Immediately cancel child contexts to trigger downstream effects.
 	p.chldCancel()
 	// Wait in a goroutine for children to terminate, to avoid blocking.
@@ -101,18 +90,18 @@ func (p *phaserImpl) doCancel() {
 // Implement Context by wraping calls to context objects.
 // Value point to the upstream context. Everything else to our new context.
 
-func (p *phaserImpl) Done() <-chan struct{} {
+func (p *Phaser) Done() <-chan struct{} {
 	return p.ctx.Done()
 }
 
-func (p *phaserImpl) Deadline() (deadline time.Time, ok bool) {
+func (p *Phaser) Deadline() (deadline time.Time, ok bool) {
 	return p.ctx.Deadline()
 }
 
-func (p *phaserImpl) Err() error {
+func (p *Phaser) Err() error {
 	return p.ctx.Err()
 }
 
-func (p *phaserImpl) Value(key interface{}) interface{} {
+func (p *Phaser) Value(key interface{}) interface{} {
 	return p.pctx.Value(key)
 }
