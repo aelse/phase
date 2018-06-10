@@ -52,7 +52,7 @@ func main() {
 }
 
 // simulate any component that needs to perform cleanup at end of context.
-func component(p phase.Phaser, name string) {
+func component(p *phase.Phaser, name string) {
 	defer p.Cancel()
 	fmt.Printf("%s started\n", name)
 	<-p.Done()
