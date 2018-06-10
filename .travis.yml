@@ -1,0 +1,16 @@
+language: go
+go:
+- 1.10.2
+os:
+- linux
+install:
+- go get -t ./...
+script:
+- go test -v ./...
+- go build -a -v
+notifications:
+  pushover:
+    api_key:
+      secure: fHdzRxJd0yjHe6SWegG7dGR5/xgkg6FiL1Su/FAKVGBaukVe8IQKK2BbU3z+JBMCbm0+XWOMWibD3+U+q2UiRWMFceTFc9WyAluAAD+mGF1X+zpxp0++/tQKOzYO6zTobq5KNEThJDnTshfy5mE4UcaIkK39I/MeTp+/lennYCuCWZEfvLFVUGkzKjh70ouAc4YJclaiwxGXpNd3ICyl9Mz9mdd+Lt6lhOJMaZOYZH1VsiLacWnDBOubResJzpAIhtKEeps3ra85eSWfkYlYzg1B9Y7jM5QcyqzsXyqK3fJIANoLGlGyEsVRdcA6axpvJIf6/33e9wmCMn3tj5WaMRKcpX+yVIUIITeBuMxuKNSMYK1A791ueuQ3zPPj/mEw9aOT/J4L7Mgcm3UrSHNImszA0i15uKfZLZf/8DnY34t+t5sfuLm2C3aOaBdqLAv9ykxyMHL91UqFkcrSz+E2a5LTm8U30etnPNLqNej8E5dhgHwUJ8VQ6EdZPfRqjGaUFFZBcGP5Nfnj3TMoc2ZNq/0aTVE/xNsf02f7LppxcjHAQcQf79L7rvBzDoKHZs8PHj8M8zTeL1FS5OzDBNjyFyUfSj8ANxnm1JQESvIRVC/R1k/fbsWATifDKkNbAtThe7bMyz3VL+mr/wz6+lHd7oYR2L+WMVFKsVFDaNZ5DjY=
+    users:
+      secure: xfx7t7R1WylTwTIogK5Q1K5ULc01SiRh13KdGD8KuZMRutsXkmNP5hC+oV9hfrVZ+UetP2NgaalvUYm1j1mt7kZ6NAlThcnSl0bgsXkE/hnMuP6o1z2B1RAUo8Y7Znf4yjrS3LMvkdtwSb0gBeq5gYnRTyHdYBF9XKNNKpFchTjan3JBjNg+8hCSYHMklj5HofVYlK5tMjdI3Xltxh9hMLfalMlx3beo5/UyZCVl5CTkSPshxaPTRf5tm+VHcgRdNxhvtBCcJJLzOa4Jdcoim7WD07Sc9PR83XSCSnP1uHb9sau8KWH5K3k9/1oRwEhY751lJ8Ke1auK7DWzkJ8z0GQQjiNhXjIUjU8X+qVk8Q9YrldH8UsZRn5qnPpQYivCiALuYpSmGK4YA40KNdku8jDTs6upsEpoxHfoqfj8uC6ISumaQJg5SnSW9iFnFtnLvU0hachQXxHluXrWWPhXB4Kg6aAH5tS30np30P50Nd/KeDBzlBK0ilWOlEPpERNNuza/i+3XkUyUCIGYwnJTbRHYRGA4V3HKuhbVJfH/o1KeHoGNwXUjCnY22Q3XzpaxGthxWV4X+LD7QtJQKikFlff9UMKrG3Hmdwsyd/MvXNZaNCO9aoJe27I3VEWoBr26Xr9IfY+o6eYaxeqfAflGTrmfG1nW7r+RQg6+p/GeuJs=
