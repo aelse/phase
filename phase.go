@@ -87,7 +87,7 @@ func (p *Phaser) doCancel() {
 	}()
 }
 
-// Implement Context by wraping calls to context objects.
+// Implement Context by wrapping calls to context objects.
 // Value point to the upstream context. Everything else to our new context.
 
 func (p *Phaser) Done() <-chan struct{} {
