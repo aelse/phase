@@ -26,14 +26,13 @@ func main() {
 	phaser := phase.FromContext(context.Background())
 
 	p0 := phaser.Next()
-	// Start the web server
-	go component(p0, "web server")
+	go component(p0, "db")
 
 	p1 := p0.Next()
 	go component(p1, "data pipeline")
 
 	p2 := p1.Next()
-	go component(p2, "db")
+	go component(p2, "web server")
 
 	fmt.Println("Shutdown in 5 seconds")
 	time.Sleep(5 * time.Second)
