@@ -12,6 +12,10 @@ func FromContext(ctx context.Context) *Phaser {
 	return phaser
 }
 
+func New() *Phaser {
+	return FromContext(context.Background())
+}
+
 type Phaser struct {
 	pctx       context.Context
 	ctx        context.Context
