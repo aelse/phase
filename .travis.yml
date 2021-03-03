@@ -1,13 +1,18 @@
 language: go
 go:
-- 1.10.2
+- 1.16
+- tip
 os:
 - linux
 install:
 - go get -t ./...
 script:
-- go test -v ./...
 - go build -a -v
+- go test -v -coverprofile=coverage.txt -covermode=atomic ./...
+after_success:
+  - bash <(curl -s https://codecov.io/bash)
+env:
+  - secure: "R6l3TthcVXBEBIKkw2A7qO8BVTZkh0EEvZZrLrhp0VAtGnzKZDW+OAGO2XP5yipga4E8SHgpKlyF1q8GAj01C/jqkJpRfDnbKbxyEYARrNfOHKLcWDqYFFgVXC5OMjVyrDT3OsdpgCa41EDef7bdRNFZ03YXyNntXsZTyZgo18b8U2EuvV4BjdEJupvO8/8VLKvExMvUxYLvjVJUaGVolkcci5z77p2JBx8eb675fGo8YIJvVrSco2Ia+OoeC85c/hs6wdnaoKMEgqxSDoHmgScKO7I+LhWFG9cBWkzIlknA+IESwfiPqNTuOYO+SDfuS18nprsgyQrokUgMNV6kF+QPzf79GfdxKaVIDGXZ2BUqG+w6HuRB79RDrkr++gO25PA+Lf2ePa/iachZLYVoaMVo1xsu4cXhvzKJ5jpD4FSDKTkXnzWxeiy2WjFW3uoInP9ieHjRqsWD3SnH9migmA6RZ5SbrrpSsgHDhrqqDtDMwRGm2seZ3ZfsP1lAsN3q6XKs24/kbj4HwbhTnrdTk7t5iNkWe/Dan8cw47JFPfjfWqUBmrnzUy6aWyZVtQMkZ6QcgoS+r9wC5mfOgaFYwoFdA/00VKP8TriCL+8QJqwR9p7Hv5AqB7reHNgk4c4UNtv41h33Q5w8FIjvrz/OPN8y+Dn8o5XnMAF46BsR0ng="
 notifications:
   pushover:
     api_key:
