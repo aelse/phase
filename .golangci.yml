@@ -107,4 +107,4 @@ linters:
       - path: (.+)_test.go
         linters:
           - revive
-        text: "^(add-constant|context-as-argument)"
+        text: "^(add-constant|context-as-argument|context-keys-type)"

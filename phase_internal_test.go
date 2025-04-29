@@ -126,9 +126,7 @@ func TestPhaseCancelCascade(t *testing.T) {
 }
 
 func TestPhaseValue(t *testing.T) {
-	type ctxStr string
-
-	ctx := context.WithValue(context.Background(), ctxStr("test"), "test")
+	ctx := context.WithValue(context.Background(), "test", "test")
 	p0 := FromContext(ctx)
 
 	if p0.Value("test") != "test" {
