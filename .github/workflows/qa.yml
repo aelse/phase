@@ -1,7 +1,7 @@
 name: Test and coverage
 on: [ push, pull_request ]
 jobs:
-    build:
+    codecov:
         runs-on: ubuntu-latest
         steps:
             -   name: Checkout code
@@ -11,8 +11,13 @@ jobs:
             -   name: Install Go
                 uses: actions/setup-go@v5
                 with:
-                    go-version: '1.24'
+                    go-version: '1.24.2'
                     cache: true
+            -   name: Linting
+                uses: golangci/golangci-lint-action@v6
+                with:
+                    version: v2.1.5
+                    args: --timeout=5m
             -   name: Run coverage
                 run: go test -race -coverprofile=coverage.txt -covermode=atomic
             -   name: Upload coverage to Codecov
