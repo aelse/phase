@@ -21,12 +21,10 @@ linters:
     - errname
     - errorlint
     - exhaustive
-    - exhaustruct
     - exptostd
     - fatcontext
     - forbidigo
     - forcetypeassert
-    - funcorder
     - funlen
     - ginkgolinter
     - gocheckcompilerdirectives
@@ -104,7 +102,24 @@ linters:
     - zerologlint
   exclusions:
     rules:
+      - linters:
+          - revive
+        text: "^exported"
+      - linters:
+          - godox
+        text: "TODO"
       - path: (.+)_test.go
         linters:
           - revive
         text: "^(add-constant|context-as-argument|context-keys-type)"
+      - path: (.+)_test.go
+        linters:
+          - staticcheck
+        text: "SA1029"
+      - path: examples/(.+)/main.go
+        linters:
+          - forbidigo
+          - forcetypeassert
+          - mnd
+          - revive
+        text: "(forbidden by pattern|type assertion|Magic number|package-comments)"

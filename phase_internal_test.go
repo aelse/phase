@@ -25,6 +25,8 @@ func assertContextFinished(t *testing.T, ctx context.Context) {
 }
 
 func TestPhaseCancelHeirarchy(t *testing.T) {
+	t.Parallel()
+
 	p0 := FromContext(context.Background())
 	p00 := p0.Next()
 	p01 := p0.Next()
@@ -65,9 +67,12 @@ func TestPhaseCancelHeirarchy(t *testing.T) {
 }
 
 func TestPhaseChainedCancel(t *testing.T) {
+	t.Parallel()
+
 	p0 := FromContext(context.Background())
 	pX := p0
-	for i := 0; i < 10; i++ {
+
+	for range 10 {
 		pX = pX.Next()
 
 		go func(p *Phaser) {
@@ -90,6 +95,7 @@ func TestPhaseChainedCancel(t *testing.T) {
 }
 
 func TestPhaseCancelCascade(t *testing.T) {
+	t.Parallel()
 	// When a Phaser's upstream context ends it should cancel downstream elements before its own context.
 	// Any listeners to the Phaser's Done() channel should not fire until after all children have done the same.
 	ctx, cancel := context.WithCancel(context.Background())
@@ -126,6 +132,8 @@ func TestPhaseCancelCascade(t *testing.T) {
 }
 
 func TestPhaseValue(t *testing.T) {
+	t.Parallel()
+
 	ctx := context.WithValue(context.Background(), "test", "test")
 	p0 := FromContext(ctx)
 
@@ -135,6 +143,8 @@ func TestPhaseValue(t *testing.T) {
 }
 
 func TestDeadlineInParent(t *testing.T) {
+	t.Parallel()
+
 	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Millisecond))
 	defer cancel()
 

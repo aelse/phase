@@ -1,3 +1,5 @@
+// Package phase implements a Phaser to provide capabilities to help shutdown
+// a system in deterministic order.
 package phase
 
 import (
@@ -10,10 +12,11 @@ func FromContext(ctx context.Context) *Phaser {
 	// TODO: check if ctx is a Phaser
 	phaser := &Phaser{}
 	phaser.init(ctx, nil)
+
 	return phaser
 }
 
-// New returns a Phaser
+// New returns a new Phaser.
 func New() *Phaser {
 	return FromContext(context.Background())
 }
@@ -67,8 +70,10 @@ func (p *Phaser) init(ctx context.Context, tell func()) {
 // create a new Phaser for each downstream component that needs ordered shutdown.
 func (p *Phaser) Next() *Phaser {
 	p.children.Add(1)
+
 	phaser := &Phaser{}
 	phaser.init(p.chldCtx, p.children.Done)
+
 	return phaser
 }
 
@@ -107,7 +112,7 @@ func (p *Phaser) Done() <-chan struct{} {
 	return p.ctx.Done()
 }
 
-func (p *Phaser) Deadline() (deadline time.Time, ok bool) {
+func (p *Phaser) Deadline() (time.Time, bool) {
 	return p.ctx.Deadline()
 }
 

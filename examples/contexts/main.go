@@ -24,7 +24,7 @@ func main() {
 
 		type ctxStr string
 		// Run some other goroutines which take an ordinary context.
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			// Phasers can be used like any other context. Let's set a value.
 			ctx := context.WithValue(p1, ctxStr("goroutine"), i)
 			go func(ctx context.Context) {
