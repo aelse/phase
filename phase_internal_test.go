@@ -34,11 +34,11 @@ func TestPhaseCancelHeirarchy(t *testing.T) {
 	// At the start nothing has terminated, and set up a Cancel trigger upon context end.
 	for _, phaser := range []*Phaser{p0, p00, p01, p010, p011} {
 		assertContextAlive(t, phaser)
-		p := phaser
-		go func() {
+
+		go func(p *Phaser) {
 			<-p.Done()
 			p.Cancel()
-		}()
+		}(phaser)
 	}
 
 	// Cancel p01 phaser, which should also cancel p010 and p011 but nothing else.
@@ -50,6 +50,7 @@ func TestPhaseCancelHeirarchy(t *testing.T) {
 	for _, ctx := range []*Phaser{p0, p00} {
 		assertContextAlive(t, ctx)
 	}
+
 	for _, ctx := range []*Phaser{p01, p010, p011} {
 		assertContextFinished(t, ctx)
 	}
@@ -57,6 +58,7 @@ func TestPhaseCancelHeirarchy(t *testing.T) {
 	// Cancel p0 and everything should end.
 	p0.Cancel()
 	time.Sleep(10 * time.Millisecond)
+
 	for _, phaser := range []*Phaser{p0, p00, p01, p010, p011} {
 		assertContextFinished(t, phaser)
 	}
@@ -64,18 +66,18 @@ func TestPhaseCancelHeirarchy(t *testing.T) {
 
 func TestPhaseChainedCancel(t *testing.T) {
 	p0 := FromContext(context.Background())
-	px := p0
+	pX := p0
 	for i := 0; i < 10; i++ {
-		px = px.Next()
-		p := px // loop scope variable
-		go func() {
+		pX = pX.Next()
+
+		go func(p *Phaser) {
 			<-p.Done()
 			p.Cancel()
-		}()
+		}(pX)
 	}
 
 	assertContextAlive(t, p0)
-	assertContextAlive(t, px)
+	assertContextAlive(t, pX)
 
 	// Cancel p0 context, which cancels the entire chain.
 	p0.Cancel()
@@ -84,7 +86,7 @@ func TestPhaseChainedCancel(t *testing.T) {
 	time.Sleep(time.Millisecond)
 
 	assertContextFinished(t, p0)
-	assertContextFinished(t, px)
+	assertContextFinished(t, pX)
 }
 
 func TestPhaseCancelCascade(t *testing.T) {
@@ -116,16 +118,29 @@ func TestPhaseCancelCascade(t *testing.T) {
 	if v != "p1" {
 		t.Errorf("Expected child context (p1) termination but got %s", v)
 	}
-	v = <-results
-	if v != "p0" {
-		t.Errorf("Expected parent context (p0) termination but got %s", v)
+
+	v2 := <-results
+	if v2 != "p0" {
+		t.Errorf("Expected parent context (p0) termination but got %s", v2)
 	}
 }
 
 func TestPhaseValue(t *testing.T) {
-	ctx := context.WithValue(context.Background(), "test", "test")
+	type ctxStr string
+
+	ctx := context.WithValue(context.Background(), ctxStr("test"), "test")
 	p0 := FromContext(ctx)
+
 	if p0.Value("test") != "test" {
 		t.Errorf("Did not get expected value from context")
 	}
+}
+
+func TestDeadlineInParent(t *testing.T) {
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(time.Millisecond))
+	defer cancel()
+
+	p0 := FromContext(ctx)
+	<-p0.Done() // Expect not to block
+	t.Log("done")
 }

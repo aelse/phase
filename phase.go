@@ -7,11 +7,13 @@ import (
 )
 
 func FromContext(ctx context.Context) *Phaser {
+	// TODO: check if ctx is a Phaser
 	phaser := &Phaser{}
-	phaser.init(ctx)
+	phaser.init(ctx, nil)
 	return phaser
 }
 
+// New returns a Phaser
 func New() *Phaser {
 	return FromContext(context.Background())
 }
@@ -28,9 +30,11 @@ type Phaser struct {
 	children   sync.WaitGroup
 }
 
-func (p *Phaser) init(ctx context.Context) {
-	// Keep parent context which we need for calls to Value.
+func (p *Phaser) init(ctx context.Context, tell func()) {
+	// Keep parent context which we need for calls to Value, and tell func for notifying
+	// parent Phaser when we terminate.
 	p.pctx = ctx
+	p.tellParent = tell
 	// Create a new cancelable context for ourselves, also used for Done and Err.
 	// This decouples cancellation from upstream context.
 	ctx2, cancel := context.WithCancel(context.Background())
@@ -40,26 +44,31 @@ func (p *Phaser) init(ctx context.Context) {
 		ctx2, dcancel = context.WithDeadline(ctx2, deadline)
 		p.dcancel = dcancel
 	}
+
 	p.ctx, p.cancel = ctx2, cancel
 	// Create a cancellable context for children.
 	chldCtx, chldCancel := context.WithCancel(ctx2)
 	p.chldCtx, p.chldCancel = chldCtx, chldCancel
 
-	// When parent ctx ends we cancel all downstream Phasers and then our own context.
-	// This preserves ordering in that all children terminate before our context ends.
 	go func() {
-		<-p.pctx.Done()
-		p.doCancel()
+		select {
+		// When parent ctx ends we cancel all downstream Phasers and then our own context.
+		// This preserves ordering in that all children terminate before our context ends.
+		case <-p.pctx.Done():
+			p.doCancel()
+		// If our context is cancelled (but not parent ctx) we return to avoid leaking the goroutine.
+		case <-p.Done():
+			break
+		}
 	}()
 }
 
 // Next registers and returns a new child Phaser. This should be called to
 // create a new Phaser for each downstream component that needs ordered shutdown.
 func (p *Phaser) Next() *Phaser {
-	phaser := &Phaser{}
-	phaser.init(p.chldCtx)
 	p.children.Add(1)
-	phaser.tellParent = p.children.Done
+	phaser := &Phaser{}
+	phaser.init(p.chldCtx, p.children.Done)
 	return phaser
 }
 
@@ -103,6 +112,7 @@ func (p *Phaser) Deadline() (deadline time.Time, ok bool) {
 }
 
 func (p *Phaser) Err() error {
+	// TODO: handle case where phaser cancelled but parent context not
 	return p.ctx.Err()
 }
 

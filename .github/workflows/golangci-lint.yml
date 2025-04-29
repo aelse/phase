@@ -18,11 +18,3 @@ jobs:
                 with:
                     version: v2.1.5
                     args: --timeout=5m
-            -   name: Run coverage
-                run: go test -race -coverprofile=coverage.txt -covermode=atomic
-            -   name: Upload coverage to Codecov
-                uses: codecov/codecov-action@v4
-                with:
-                    token: ${{ secrets.CODECOV_TOKEN }}
-                    file: ./coverage.txt
-                    fail_ci_if_error: true

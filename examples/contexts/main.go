@@ -19,12 +19,14 @@ func main() {
 	p0 := phaser.Next()
 	go func(p *phase.Phaser) {
 		fmt.Println("started p0 func")
+
 		p1 := p.Next()
 
+		type ctxStr string
 		// Run some other goroutines which take an ordinary context.
 		for i := 0; i < 5; i++ {
 			// Phasers can be used like any other context. Let's set a value.
-			ctx := context.WithValue(p1, "goroutine", i)
+			ctx := context.WithValue(p1, ctxStr("goroutine"), i)
 			go func(ctx context.Context) {
 				num := ctx.Value("goroutine").(int)
 				fmt.Printf("goroutine(%d) started\n", num)
