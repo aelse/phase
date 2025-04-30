@@ -117,7 +117,6 @@ func (p *Phaser) Deadline() (time.Time, bool) {
 }
 
 func (p *Phaser) Err() error {
-	// TODO: handle case where phaser cancelled but parent context not
 	return p.ctx.Err()
 }
 

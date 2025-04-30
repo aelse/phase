@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func assertContextAlive(t *testing.T, ctx context.Context) {
@@ -151,4 +153,26 @@ func TestDeadlineInParent(t *testing.T) {
 	p0 := FromContext(ctx)
 	<-p0.Done() // Expect not to block
 	t.Log("done")
+}
+
+func TestPhaserErrWhenParentCtxCancelled(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	p0 := FromContext(ctx)
+
+	cancel()
+	<-p0.Done()
+	assert.Error(t, p0.Err(), "Expected non nil error after cancellation")
+}
+
+func TestPhaserErrWhenSelfCancelled(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	p0 := FromContext(ctx)
+
+	p0.Cancel()
+	<-p0.Done()
+	assert.Error(t, p0.Err(), "Expected non nil error after cancellation")
 }
