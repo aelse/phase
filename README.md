@@ -121,7 +121,7 @@ func component(p *phase.Phaser, name string) {
 }
 ```
 
-🔎 See the examples directory for more complete use cases.
+🔎 See the godoc examples for more complete use cases.
 
 ## 🔁 Alternatives
 

@@ -128,3 +128,7 @@ linters:
           - mnd
           - revive
         text: "(forbidden by pattern|type assertion|Magic number|package-comments)"
+      - path: example_test.go
+        linters:
+          - testableexamples
+        text: "missing output for example"

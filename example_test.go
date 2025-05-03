@@ -32,3 +32,115 @@ func ExamplePhaser() {
 	// Output: ticker fired
 	// context ended
 }
+
+func ExamplePhaser_orderedShutdown() {
+	f := func(ctx context.Context, message string) {
+		defer phase.Close(ctx)
+		<-ctx.Done()
+		phase.Wait(ctx)
+		fmt.Println(message)
+	}
+
+	p0 := phase.Next(context.Background())
+	p1 := phase.Next(p0)
+	p2 := phase.Next(p1)
+
+	go f(p0, "p0 ended")
+	go f(p1, "p1 ended")
+	go f(p2, "p2 ended")
+
+	// We expect contexts to end in order: p2, p1, p0.
+
+	// Cancel Phaser chain
+	phase.Cancel(p0)
+	phase.Wait(p0)
+	fmt.Println("finished!")
+	// Output: p2 ended
+	// p1 ended
+	// p0 ended
+	// finished!
+}
+
+func ExamplePhaser_contexts() {
+	// Create a top lever phaser which will be cancelled at end of main.
+	p0 := phase.Next(context.Background())
+	defer phase.Close(p0)
+
+	go func(ctx context.Context) {
+		fmt.Println("started p0 func")
+
+		p1 := phase.Next(ctx)
+		defer phase.Close(p1)
+
+		type ctxStr string
+		// Run some other goroutines which take an ordinary context.
+		for i := range 5 {
+			// Phasers can be used like any other context. Let's set a value.
+			ctx := context.WithValue(p1, ctxStr("goroutine"), i)
+			go func(ctx context.Context) {
+				//nolint:forcetypeassert
+				num := ctx.Value(ctxStr("goroutine")).(int)
+				fmt.Printf("goroutine(%d) started\n", num)
+				<-ctx.Done()
+				fmt.Printf("goroutine(%d) finished\n", num)
+			}(ctx)
+		}
+
+		// Wait for our initiating context cancellation to perform cleanup.
+		<-ctx.Done()
+
+		fmt.Println("Waiting for descendent phases to end (none in this example)")
+		phase.Wait(p1)
+
+		// There is no guarantee on order of completion for the goroutines
+		// as they only deal in contexts not Phasers. I can try to manage this
+		// in some other way.
+		fmt.Println("Waiting a few seconds for goroutines to finish")
+		time.Sleep(3 * time.Second)
+	}(p0)
+
+	fmt.Println("Shutdown in 5 seconds")
+	time.Sleep(5 * time.Second)
+	phase.Cancel(p0)
+	fmt.Println("Waiting on children")
+	phase.Wait(p0) // Wait until everything has finished.
+	fmt.Println("Bye!")
+}
+
+func ExamplePhaser_simpleDI() {
+	// simulate any component that needs to perform cleanup at end of context.
+	component := func(ctx context.Context, name string) {
+		defer phase.Close(ctx)
+		fmt.Printf("%s started\n", name)
+		<-ctx.Done()
+		// There might be child phases, so call Wait
+		phase.Wait(ctx)
+		fmt.Printf("%s shutting down\n", name)
+		time.Sleep(time.Second)
+	}
+
+	// Create a top level phase which will be cancelled at end of main.
+	p0 := phase.Next(context.Background())
+	defer phase.Close(p0)
+
+	// Create a tree of phasers from the root and use dependency injection to pass it
+	// to each components. The downside of this is that the components need to know
+	// they are responsible for cleaning up a phase that they didn't create.
+	p1 := phase.Next(p0)
+	go component(p1, "db")
+
+	p2 := phase.Next(p1)
+	go component(p2, "data pipeline")
+
+	p3 := phase.Next(p2)
+	go component(p3, "web server")
+
+	fmt.Println("Shutdown in 2 seconds")
+	time.Sleep(2 * time.Second)
+
+	// Cancel this context, which cascades down.
+	phase.Cancel(p0)
+	// Wait until everything has finished.
+	phase.Wait(p0)
+	fmt.Println("Bye!")
+}
