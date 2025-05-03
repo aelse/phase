@@ -6,63 +6,81 @@
 
 # Phase
 
-Phase helps your applications to perform graceful ordered shutdown under your control.
+**Phase** helps Go applications perform _graceful, ordered shutdown_ — giving you explicit control over how subsystems wind down.
 
-You can use Phase to help you build systems that shutdown in an ordered sequence,
-allowing you to drain connections, flush outstanding queue items and persist
-data before termination.
+Use Phase to ensure resources are released in the right order: servers stop accepting connections before pipelines drain, and pipelines complete before writing to the database ends.
 
-## Why this package exists
+---
 
-If my application consists of a web server with an internal pipeline
-backed by a database my data flow may look something like:
+## 🚦 Why Phase?
+
+Imagine your app has this data flow:
 
 [ Web API Request ] -> [ Transform Data ] -> [ Persist to DB ]
 
-When I shutdown this system I don't want to lose any data submitted by users, so
-what I would like to happen is
+During shutdown, you want:
 
-1. Stop the web server accepting requests
-2. Empty the queue of any outstanding payloads to transform
-3. Complete reading the queued, transformed data and persist to DB
-4. Terminate program
+1. The web server to stop accepting new requests
+2. Outstanding work in the transformation queue to finish
+3. Final transformed data to be persisted to the database
+4. The program to exit cleanly
 
-When you cancel a context that immediately progagates downstream to any contexts
-created from it.
-This means you cannot simply cancel a single context at top level because then
-you can not choose the order in which your goroutines will terminate.
+But standard `context.Context` cancels everything _immediately_ downstream, making it hard to enforce this order. You’d need to manually coordinate dependent goroutines — a recipe for bugs and complexity.
 
-To have ordered shutdown you have to deal with dependent contexts yourself.
-This makes your code busy, prone to error and difficult to troubleshoot.
+**Phase** solves this by chaining context lifecycles with parent-child awareness. Shutdown proceeds in reverse order of creation, giving you fine-grained control with a simple API.
 
-## Background
+---
 
-Since contexts were released in go 1.7 they have become a staple of many projects.
-One common use of contexts is to manage graceful program termination. Unfortunately
-contexts on their own are not well suited to this as they do not provide very
-granular control over program execution.
+## 🧠 Background
 
-Phase solves this problem by providing a Context that handles ordered cancellation.
-You can pass a `phase.Phaser` anywhere that accepts a `context.Context`
-This allows control of shutdown sequence for Phaser-aware functions, and approximate
-control of shutdown sequence where functions are only context-aware.
+Go’s `context.Context` is often used to manage cancellation. However, it wasn’t designed for ordered shutdown of interdependent goroutines.
 
-## Use
+Phase extends this concept by introducing a `Phaser` — a context with awareness of its children. It gives you a simple interface to create, cancel, wait, and close contexts in a reliable, deterministic order.
 
-Install the package with `go get github.com/aelse/phase`
+---
 
-A `phase.Phaser` is created from any context object, using `phase.FromContext(ctx)`.
+## ✨ Features
 
-The returned Phaser can be used to create additional child Phasers by calling its `Next()` function, which can also be used to create new Phasers.
+- ✅ Works anywhere a `context.Context` is accepted
+- 📚 Automatically tracks child phases
+- ⛓ Graceful teardown in reverse order of creation
+- 🧹 Guarantees that cleanup completes before parent exits
 
-* When a Phaser is cancelled its children will terminate in reverse order.
-* A phaser may be cancelled by calling `Cancel()` on it to trigger termination of itself and all downstream Phasers.
-* Every phaser must have `Cancel()` called on it once its context has terminated.
-* A Phaser may be passed to a function expecting a `context.Context` but ordering of shutdown is not guaranteed since that function has no way of signalling the parent when it has completed.
+---
 
-Here's an example implementing a solution to the problem scenario further below.
+## 🚀 Getting Started
 
+Install:
+
+```bash
+go get github.com/aelse/phase
 ```
+
+Create a root Phaser from any context:
+
+```go
+phaser := phase.FromContext(context.Background())
+```
+
+Spawn child phases using Next():
+
+```go
+child := phaser.Next()
+```
+
+Cancel and wait for shutdown in reverse order:
+
+```go
+child.Cancel()
+phase.Wait(child)
+phase.Close(child)
+```
+
+## 🔧 Example
+
+```go
+package main
+
 import (
 	"context"
 	"fmt"
@@ -72,47 +90,48 @@ import (
 )
 
 func main() {
-	// Create a top lever phaser which will be cancelled at end of main.
-	phaser := phase.FromContext(context.Background())
+	// Create root phaser
+	ph := phase.FromContext(context.Background())
 
-	p0 := phaser.Next()
-	// Start the web server
-	go component(p0, "web server")
+	// Each subsystem is a child of the previous
+	web := ph.Next()
+	go component(web, "Web Server")
 
-	p1 := p0.Next()
-	go component(p1, "data pipeline")
+	pipeline := web.Next()
+	go component(pipeline, "Data Pipeline")
 
-	p2 := p1.Next()
-	go component(p2, "db")
+	db := pipeline.Next()
+	go component(db, "Database")
 
-	fmt.Println("Shutdown in 5 seconds")
+	fmt.Println("Shutting down in 5 seconds...")
 	time.Sleep(5 * time.Second)
-	phaser.Cancel()
-	<-phaser.Done() // Wait until everything has finished.
-	fmt.Println("Bye!")
+
+	// Start shutdown from root
+	ph.Cancel()
+	<-ph.Done() // Wait for all phases to complete
+	fmt.Println("All systems shut down.")
 }
 
-// simulate any component that needs to perform cleanup at end of context.
 func component(p *phase.Phaser, name string) {
 	defer p.Cancel()
-	fmt.Printf("%s started\n", name)
+	fmt.Printf("[%s] started\n", name)
 	<-p.Done()
-	fmt.Printf("%s shutting down\n", name)
+	fmt.Printf("[%s] shutting down\n", name)
 	time.Sleep(time.Second)
 }
 ```
 
-See the [examples](./examples/) directory for working examples.
+🔎 See the examples directory for more complete use cases.
 
-## Alternatives
+## 🔁 Alternatives
 
-Here are similar projects I'm aware of.
+Projects with similar goals:
 
-* [ash2k/stager](https://github.com/ash2k/stager)
-* [skovtunenko/graterm](https://github.com/skovtunenko/graterm)
-* [icholy/killable](https://github.com/icholy/killable)
-* [tomb](https://gopkg.in/tomb.v1)
+* ash2k/stager
+* skovtunenko/graterm
+* icholy/killable
+* tomb
 
-## License
+## 🪪 License
 
-This project is released under the MIT License. Please see the `License` file in this repository.
+This project is licensed under the MIT License. See LICENSE for details.

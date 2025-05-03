@@ -51,7 +51,6 @@ linters:
     - ineffassign
     - interfacebloat
     - intrange
-    - ireturn
     - lll
     - loggercheck
     - maintidx
@@ -68,7 +67,6 @@ linters:
     - nlreturn
     - noctx
     - nolintlint
-    - nonamedreturns
     - nosprintfhostport
     - paralleltest
     - perfsprint
@@ -102,6 +100,13 @@ linters:
     - zerologlint
   exclusions:
     rules:
+      - linters:
+          - contextcheck
+        text: "^Non-inherited new context"
+      - path: (.*)_test.go
+        linters:
+          - fatcontext
+        text: "nested context in loop"
       - linters:
           - revive
         text: "^exported"

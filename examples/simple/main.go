@@ -22,30 +22,33 @@ import (
 )
 
 func main() {
-	// Create a top lever phaser which will be cancelled at end of main.
-	phaser := phase.FromContext(context.Background())
+	// Create a top level context which will be cancelled at end of main.
+	ctx, cancel := phase.Next(context.Background())
 
-	p0 := phaser.Next()
-	go component(p0, "db")
+	p1, c1 := phase.Next(ctx)
+	go component(p1, c1, "db")
 
-	p1 := p0.Next()
-	go component(p1, "data pipeline")
+	p2, c2 := phase.Next(p1)
+	go component(p2, c2, "data pipeline")
 
-	p2 := p1.Next()
-	go component(p2, "web server")
+	p3, c3 := phase.Next(p2)
+	go component(p3, c3, "web server")
 
 	fmt.Println("Shutdown in 5 seconds")
 	time.Sleep(5 * time.Second)
-	phaser.Cancel()
-	<-phaser.Done() // Wait until everything has finished.
+
+	// Cancel this context, which cascades down.
+	cancel()
+	// Wait until everything has finished.
+	<-ctx.Done()
 	fmt.Println("Bye!")
 }
 
 // simulate any component that needs to perform cleanup at end of context.
-func component(p *phase.Phaser, name string) {
-	defer p.Cancel()
+func component(ctx context.Context, cancel context.CancelFunc, name string) {
+	defer cancel()
 	fmt.Printf("%s started\n", name)
-	<-p.Done()
+	<-ctx.Done()
 	fmt.Printf("%s shutting down\n", name)
 	time.Sleep(time.Second)
 }
