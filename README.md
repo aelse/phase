@@ -71,7 +71,7 @@ child := phaser.Next()
 Cancel and wait for shutdown in reverse order:
 
 ```go
-child.Cancel()
+phase.Cancel(child)
 phase.Wait(child)
 phase.Close(child)
 ```
@@ -91,33 +91,38 @@ import (
 
 func main() {
 	// Create root phaser
-	ph := phase.FromContext(context.Background())
+	ph := phase.Next(context.Background())
+	defer phase.Close(ph)
 
 	// Each subsystem is a child of the previous
-	web := ph.Next()
+	web := phase.Next(ph)
 	go component(web, "Web Server")
 
-	pipeline := web.Next()
+	pipeline := phase.Next(web)
 	go component(pipeline, "Data Pipeline")
 
-	db := pipeline.Next()
+	db := phase.Next(pipeline)
 	go component(db, "Database")
 
 	fmt.Println("Shutting down in 5 seconds...")
 	time.Sleep(5 * time.Second)
 
 	// Start shutdown from root
-	ph.Cancel()
-	<-ph.Done() // Wait for all phases to complete
+	phase.Cancel(ph)
+	// Wait for all phases to complete
+	phase.Wait(ph)
 	fmt.Println("All systems shut down.")
 }
 
-func component(p *phase.Phaser, name string) {
-	defer p.Cancel()
+func component(p phase.Phaser, name string) {
+	defer phase.Close(p)
 	fmt.Printf("[%s] started\n", name)
 	<-p.Done()
-	fmt.Printf("[%s] shutting down\n", name)
+	fmt.Printf("[%s] shutting down (wait for children)\n", name)
+	phase.Wait(p)
+	fmt.Printf("[%s] shutting down (cleanup)\n", name)
 	time.Sleep(time.Second)
+	fmt.Printf("[%s] shutting down\n", name)
 }
 ```
 
