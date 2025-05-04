@@ -64,6 +64,21 @@
 //
 // The function owning the phase can use this opportunity to perform final cleanup
 // before calling `phase.Close`, usually via a deferred call.
+//
+// ## A note on phase ownership
+//
+// A function may begin a phase to cover the scope of its own activities, or to
+// hand off to another function. In the simple case where a function begins a phase
+// for itself (ensuring function fully terminates before parent phases end) it is
+// clear that the programmer must Close the phase before returning.
+//
+// When orchestrating the start of an application you
+// may wish to create a number of phases and pass the relevant context to your
+// application components (dependency injection) with the expectation the components
+// will Close their phase before returning. If these phases are passed to those
+// functions as a context.Context the requirement may be overlooked and so it
+// is preferable to make the first argument to those functions a phase.Phaser
+// to indicate the requirement and avoid confusion.
 package phase
 
 import (
@@ -75,7 +90,7 @@ import (
 // It returns a new Phaser, which implements context.Context.
 //
 // Calling Next is the starting point for phase coordination.
-func Next(parent context.Context) (phaser Phaser) {
+func Next(parent context.Context) (phaser *phaseCtx) {
 	ctx, cancel := context.WithCancel(parent)
 	p := &phaseCtx{
 		Context:    ctx,
@@ -138,7 +153,9 @@ type Phaser interface {
 	wait()
 }
 
-var _ Phaser = &phaseCtx{}
+// phaseCtx meets Phaser and context.Context interfaces.
+var _ Phaser = (*phaseCtx)(nil)
+var _ context.Context = (*phaseCtx)(nil)
 
 type phaseCtx struct {
 	context.Context

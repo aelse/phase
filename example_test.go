@@ -61,6 +61,42 @@ func ExamplePhaser_orderedShutdown() {
 	// finished!
 }
 
+func ExamplePhaser_funcTree() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	phaser := phase.Next(ctx)
+	defer phase.Close(phaser)
+
+	type recursiveFunc func(f recursiveFunc, ctx context.Context, i, depth int)
+
+	f := func(f recursiveFunc, ctx context.Context, i, depth int) {
+		if i >= depth {
+			return
+		}
+		// Create a phase to cover this function scope, and defer Close.
+		p := phase.Next(ctx)
+		defer phase.Close(p)
+
+		// Create child funcs up to depth.
+		go f(f, p, i+1, depth)
+
+		// Wait on phase to be done, either due to propagated cancelation
+		// or a call to phase.Cancel targeting `p` (n/a in this example).
+		fmt.Printf("func<%d> doing work, waiting for context end\n", i)
+		<-p.Done()
+		// Child phases must return first
+		phase.Wait(p)
+		fmt.Printf("func<%d> returning\n", i)
+	}
+
+	go f(f, phaser, 0, 5)
+	// Top level context timeout propagates down and we wait on the phaser.
+	<-ctx.Done()
+	fmt.Println("Waiting on top level phaser to complete")
+	phase.Wait(phaser)
+	fmt.Println("Top level phaser ended. Bye!")
+}
+
 func ExamplePhaser_contexts() {
 	// Create a top lever phaser which will be cancelled at end of main.
 	p0 := phase.Next(context.Background())
@@ -107,14 +143,17 @@ func ExamplePhaser_contexts() {
 	fmt.Println("Bye!")
 }
 
-func ExamplePhaser_simpleDI() {
-	// simulate any component that needs to perform cleanup at end of context.
-	component := func(ctx context.Context, name string) {
-		defer phase.Close(ctx)
+func ExamplePhaser_phaserDI() {
+	// Simulate any component that needs to perform cleanup at end of context.
+	// The first are is a phase.Phaser rather than context.Context so that the
+	// programmer knows to deal with handling the phase.
+	// This is a hint to the programmer, not a difference in implementation.
+	component := func(phaser phase.Phaser, name string) {
+		defer phase.Close(phaser)
 		fmt.Printf("%s started\n", name)
-		<-ctx.Done()
+		<-phaser.Done()
 		// There might be child phases, so call Wait
-		phase.Wait(ctx)
+		phase.Wait(phaser)
 		fmt.Printf("%s shutting down\n", name)
 		time.Sleep(time.Second)
 	}
@@ -124,8 +163,7 @@ func ExamplePhaser_simpleDI() {
 	defer phase.Close(p0)
 
 	// Create a tree of phasers from the root and use dependency injection to pass it
-	// to each components. The downside of this is that the components need to know
-	// they are responsible for cleaning up a phase that they didn't create.
+	// to each component.
 	p1 := phase.Next(p0)
 	go component(p1, "db")
 
