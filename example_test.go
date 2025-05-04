@@ -41,7 +41,10 @@ func ExamplePhaser_orderedShutdown() {
 		fmt.Println(message)
 	}
 
-	p0 := phase.Next(context.Background())
+	phaser := phase.Next(context.Background())
+	defer phase.Close(phaser)
+
+	p0 := phase.Next(phaser)
 	p1 := phase.Next(p0)
 	p2 := phase.Next(p1)
 
@@ -52,8 +55,8 @@ func ExamplePhaser_orderedShutdown() {
 	// We expect contexts to end in order: p2, p1, p0.
 
 	// Cancel Phaser chain
-	phase.Cancel(p0)
-	phase.Wait(p0)
+	phase.Cancel(phaser)
+	phase.Wait(phaser)
 	fmt.Println("finished!")
 	// Output: p2 ended
 	// p1 ended
@@ -64,6 +67,7 @@ func ExamplePhaser_orderedShutdown() {
 func ExamplePhaser_funcTree() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
 	phaser := phase.Next(ctx)
 	defer phase.Close(phaser)
 

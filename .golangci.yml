@@ -109,7 +109,7 @@ linters:
         text: "nested context in loop"
       - linters:
           - revive
-        text: "^exported"
+        text: "^(exported|unexported-return)"
       - linters:
           - godox
         text: "TODO"
