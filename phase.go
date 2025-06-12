@@ -110,55 +110,15 @@ func Next(parent context.Context) (phaser *phaseCtx, err error) {
 	return p, nil
 }
 
-// Cancel signals that the phase identified by the given context should end.
-// This cancels the context and begins coordinated shutdown.
-//
-// Cancel will panic if the context does not contain a Phaser.
-func Cancel(ctx context.Context) {
-	phase := ancestorPhaseCtx(ctx)
-	if phase == nil {
-		panic("attempt to cancel phase when not in a phase")
-	}
-
-	phase.close()
-}
-
-// Close marks the phase as complete and removes it from its parent.
-// This should be called after all child phases have completed, typically
-// after a call to Wait.
-//
-// Close will panic if the context does not contain a Phaser.
-func Close(ctx context.Context) {
-	phase := ancestorPhaseCtx(ctx)
-	if phase == nil {
-		panic("attempt to close phase when not in a phase")
-	}
-
-	phase.close()
-}
-
-// Wait blocks until all child phases of the identified phase have completed.
-// It must be called before Close to ensure all nested work is finished.
-//
-// Wait will panic if the context does not contain a Phaser.
-func Wait(ctx context.Context) {
-	phase := ancestorPhaseCtx(ctx)
-	if phase == nil {
-		panic("attempt to wait when not in a phase")
-	}
-
-	phase.wait()
-}
-
 // A Phaser is a context.Context that participates in coordinated phase shutdown.
 //
 // A Phaser tracks child phases created via Next, and ensures they are all
 // properly terminated before the phase itself is considered closed.
 type Phaser interface {
 	context.Context
-	cancel()
-	close()
-	wait()
+	Cancel()
+	Close()
+	WaitForChildren()
 }
 
 // phaseCtx meets Phaser and context.Context interfaces.
@@ -234,11 +194,11 @@ func (p *phaseCtx) debug(_ string) {
 	// fmt.Printf("%p: %s\n", p, message)
 }
 
-func (p *phaseCtx) cancel() {
+func (p *phaseCtx) Cancel() {
 	p.cancelFunc()
 }
 
-func (p *phaseCtx) close() {
+func (p *phaseCtx) Close() {
 	// Always call cancel in case it has not been called already, to close our internal context.
 	// This is the case when the context ends due to propagated context cancelation.
 	p.cancelFunc()
@@ -253,9 +213,10 @@ func (p *phaseCtx) close() {
 	}
 }
 
-func (p *phaseCtx) wait() {
+func (p *phaseCtx) WaitForChildren() {
 	p.debug("waiting on children")
 	p.children.Wait()
+	p.debug("finished waiting on children")
 }
 
 func (p *phaseCtx) Value(key any) any {

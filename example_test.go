@@ -19,9 +19,9 @@ func ExamplePhaser() {
 		}
 		// Wait until child phases end.
 		// There are none in this example but we demonstrate correct behaviour.
-		phase.Wait(next)
+		next.WaitForChildren()
 		// Signal that our phase has ended.
-		phase.Close(next)
+		next.Close()
 	}
 
 	ctx := context.Background()
@@ -34,15 +34,15 @@ func ExamplePhaser() {
 }
 
 func ExamplePhaser_orderedShutdown() {
-	f := func(ctx context.Context, message string) {
-		defer phase.Close(ctx)
-		<-ctx.Done()
-		phase.Wait(ctx)
+	f := func(p phase.Phaser, message string) {
+		defer p.Close()
+		<-p.Done()
+		p.WaitForChildren()
 		fmt.Println(message)
 	}
 
 	phaser, _ := phase.Next(context.Background())
-	defer phase.Close(phaser)
+	defer phaser.Close()
 
 	p0, _ := phase.Next(phaser)
 	p1, _ := phase.Next(p0)
@@ -55,8 +55,8 @@ func ExamplePhaser_orderedShutdown() {
 	// We expect contexts to end in order: p2, p1, p0.
 
 	// Cancel Phaser chain
-	phase.Cancel(phaser)
-	phase.Wait(phaser)
+	phaser.Cancel()
+	phaser.WaitForChildren()
 	fmt.Println("finished!")
 	// Output: p2 ended
 	// p1 ended
@@ -69,7 +69,7 @@ func ExamplePhaser_funcTree() {
 	defer cancel()
 
 	phaser, _ := phase.Next(ctx)
-	defer phase.Close(phaser)
+	defer phaser.Close()
 
 	type recursiveFunc func(f recursiveFunc, ctx context.Context, i, depth int)
 
@@ -79,7 +79,7 @@ func ExamplePhaser_funcTree() {
 		}
 		// Create a phase to cover this function scope, and defer Close.
 		p, _ := phase.Next(ctx)
-		defer phase.Close(p)
+		defer p.Close()
 
 		// Create child funcs up to depth.
 		go f(f, p, i+1, depth)
@@ -89,7 +89,7 @@ func ExamplePhaser_funcTree() {
 		fmt.Printf("func<%d> doing work, waiting for context end\n", i)
 		<-p.Done()
 		// Child phases must return first
-		phase.Wait(p)
+		p.WaitForChildren()
 		fmt.Printf("func<%d> returning\n", i)
 	}
 
@@ -97,20 +97,20 @@ func ExamplePhaser_funcTree() {
 	// Top level context timeout propagates down and we wait on the phaser.
 	<-ctx.Done()
 	fmt.Println("Waiting on top level phaser to complete")
-	phase.Wait(phaser)
+	phaser.WaitForChildren()
 	fmt.Println("Top level phaser ended. Bye!")
 }
 
 func ExamplePhaser_contexts() {
 	// Create a top lever phaser which will be cancelled at end of main.
 	p0, _ := phase.Next(context.Background())
-	defer phase.Close(p0)
+	defer p0.Close()
 
 	go func(ctx context.Context) {
 		fmt.Println("started p0 func")
 
 		p1, _ := phase.Next(ctx)
-		defer phase.Close(p1)
+		defer p1.Close()
 
 		type ctxStr string
 		// Run some other goroutines which take an ordinary context.
@@ -130,7 +130,7 @@ func ExamplePhaser_contexts() {
 		<-ctx.Done()
 
 		fmt.Println("Waiting for descendent phases to end (none in this example)")
-		phase.Wait(p1)
+		p1.WaitForChildren()
 
 		// There is no guarantee on order of completion for the goroutines
 		// as they only deal in contexts not Phasers. I can try to manage this
@@ -141,9 +141,9 @@ func ExamplePhaser_contexts() {
 
 	fmt.Println("Shutdown in 5 seconds")
 	time.Sleep(5 * time.Second)
-	phase.Cancel(p0)
+	p0.Cancel()
 	fmt.Println("Waiting on children")
-	phase.Wait(p0) // Wait until everything has finished.
+	p0.WaitForChildren() // Wait until everything has finished.
 	fmt.Println("Bye!")
 }
 
@@ -153,18 +153,18 @@ func ExamplePhaser_phaserDI() {
 	// programmer knows to deal with handling the phase.
 	// This is a hint to the programmer, not a difference in implementation.
 	component := func(phaser phase.Phaser, name string) {
-		defer phase.Close(phaser)
+		defer phaser.Close()
 		fmt.Printf("%s started\n", name)
 		<-phaser.Done()
 		// There might be child phases, so call Wait
-		phase.Wait(phaser)
+		phaser.WaitForChildren()
 		fmt.Printf("%s shutting down\n", name)
 		time.Sleep(time.Second)
 	}
 
 	// Create a top level phase which will be cancelled at end of main.
 	p0, _ := phase.Next(context.Background())
-	defer phase.Close(p0)
+	defer p0.Close()
 
 	// Create a tree of phasers from the root and use dependency injection to pass it
 	// to each component.
@@ -181,8 +181,8 @@ func ExamplePhaser_phaserDI() {
 	time.Sleep(2 * time.Second)
 
 	// Cancel this context, which cascades down.
-	phase.Cancel(p0)
+	p0.Cancel()
 	// Wait until everything has finished.
-	phase.Wait(p0)
+	p0.WaitForChildren()
 	fmt.Println("Bye!")
 }

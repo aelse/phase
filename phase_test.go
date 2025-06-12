@@ -32,8 +32,8 @@ func TestPhaseCloseOne(t *testing.T) {
 	t.Parallel()
 
 	p, _ := phase.Next(context.Background())
-	phase.Wait(p)
-	phase.Close(p)
+	p.WaitForChildren()
+	p.Close()
 	assert.Error(t, p.Err(), "expect context to return error")
 }
 
@@ -41,8 +41,8 @@ func TestPhaseCancel(t *testing.T) {
 	t.Parallel()
 
 	p, _ := phase.Next(context.Background())
-	phase.Cancel(p)
-	assert.NotPanics(t, func() { phase.Cancel(p) }, "additional calls to cancel do not cause panic")
+	p.Cancel()
+	assert.NotPanics(t, func() { p.Cancel() }, "additional calls to cancel do not cause panic")
 }
 
 func TestDeadlineInParent(t *testing.T) {
@@ -52,7 +52,7 @@ func TestDeadlineInParent(t *testing.T) {
 	defer cancel()
 
 	p0, _ := phase.Next(ctx)
-	defer phase.Close(p0)
+	defer p0.Close()
 	// Expect not to block since deadline cancels context chain.
 	<-p0.Done()
 	assert.Error(t, p0.Err())
@@ -62,7 +62,7 @@ func TestPhaseCancelChild(t *testing.T) {
 	t.Parallel()
 
 	p0, _ := phase.Next(context.Background())
-	defer phase.Close(p0) // cleanup
+	defer p0.Close() // cleanup
 
 	ctx, cancel := context.WithCancel(p0)
 	p1, _ := phase.Next(ctx)
@@ -83,15 +83,15 @@ func TestPhaseCancelParent(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	p0, _ := phase.Next(ctx)
-	defer phase.Close(p0)
+	defer p0.Close()
 
 	p1, _ := phase.Next(p0)
 
 	// Child is responsible for calling Done when its context ends.
 	go func() {
 		<-p1.Done()
-		phase.Wait(p1)
-		phase.Close(p1)
+		p1.WaitForChildren()
+		p1.Close()
 	}()
 
 	// Cancel top level context, which should propagate down.
@@ -116,18 +116,18 @@ func TestPhaseCancelHeirarchy(t *testing.T) {
 	p011, _ := phase.Next(p01)
 
 	// At the start nothing has terminated, and set up a Cancel trigger upon context end.
-	for _, p := range []context.Context{p0, p00, p01, p010, p011} {
+	for _, p := range []phase.Phaser{p0, p00, p01, p010, p011} {
 		assertContextAlive(t, p)
 
-		go func(p context.Context) {
+		go func(p phase.Phaser) {
 			<-p.Done()
-			phase.Wait(p)
-			phase.Close(p)
+			p.WaitForChildren()
+			p.Close()
 		}(p)
 	}
 
 	// Cancel p01 phaser, which should also cancel p010 and p011 but nothing else.
-	phase.Close(p01)
+	p01.Close()
 
 	// Allow time for goroutines to run.
 	time.Sleep(10 * time.Millisecond)
@@ -157,18 +157,19 @@ func TestPhaseChainedCancel(t *testing.T) {
 
 	ctx := ctx0
 	for i := range 10 {
-		ctx, _ = phase.Next(ctx)
+		p, _ := phase.Next(ctx)
+		ctx = p // setup next iteration
 
-		go func(ctx context.Context, i int) {
+		go func(p phase.Phaser, i int) {
 			t.Logf("%d: waiting on context cancellation", i)
 			<-ctx.Done()
 			// If the context ends we wait on children
 			t.Logf("%d: waiting on children", i)
-			phase.Wait(ctx)
+			p.WaitForChildren()
 			// and then signal parent we're done
 			t.Logf("%d: signal parent", i)
-			phase.Close(ctx)
-		}(ctx, i)
+			p.Close()
+		}(p, i)
 	}
 
 	assertContextAlive(t, ctx0)
@@ -192,10 +193,10 @@ func TestPhaseCancelCascade(t *testing.T) {
 	p0, _ := phase.Next(ctx)
 	go func() {
 		<-p0.Done()
-		phase.Wait(p0)
+		p0.WaitForChildren()
 		results <- "p0"
 
-		phase.Close(p0)
+		p0.Close()
 	}()
 
 	p1, _ := phase.Next(p0)
@@ -203,10 +204,10 @@ func TestPhaseCancelCascade(t *testing.T) {
 		<-p1.Done()
 		// Parent Phaser's context should not end until we send a notification via Cancel()
 		time.Sleep(10 * time.Millisecond)
-		phase.Wait(p1)
+		p1.WaitForChildren()
 		results <- "p1"
 
-		phase.Close(p1)
+		p1.Close()
 	}()
 
 	// Cancel the root context to trigger the cascade.
@@ -229,7 +230,7 @@ func TestPhaseValue(t *testing.T) {
 	ctx := context.WithValue(context.Background(), &t, "test")
 
 	p0, _ := phase.Next(ctx)
-	defer phase.Close(p0)
+	defer p0.Close()
 
 	assert.Equal(t, "test", p0.Value(&t), "Expected value to propagate through phase context")
 }
@@ -240,7 +241,7 @@ func TestPhaserErrWhenParentCtxCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	p0, _ := phase.Next(ctx)
-	defer phase.Close(p0)
+	defer p0.Close()
 
 	cancel()
 	<-p0.Done()
@@ -253,7 +254,7 @@ func TestPhaserWaitBlocksUntilDone(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	p0, _ := phase.Next(ctx)
-	defer phase.Close(p0)
+	defer p0.Close()
 
 	cancel()
 	select {
@@ -271,7 +272,7 @@ func TestPhaserContextCancelPropagatesToPhaser(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	p0, _ := phase.Next(ctx)
-	defer phase.Close(p0)
+	defer p0.Close()
 
 	cancel()
 	select {
@@ -287,27 +288,9 @@ func TestPhaserSelfCancel(t *testing.T) {
 	t.Parallel()
 
 	p0, _ := phase.Next(context.Background())
-	defer phase.Close(p0)
+	defer p0.Close()
 
-	phase.Cancel(p0)
-	select {
-	case <-p0.Done():
-		t.Log("Waited for done and found it")
-	default:
-		t.Error("Expected Cancel to terminate phaser context")
-	}
-	assert.Error(t, p0.Err(), "Expected non nil error after cancellation")
-}
-
-func TestPhaserSelfCancelViaContextChain(t *testing.T) {
-	t.Parallel()
-
-	p0, _ := phase.Next(context.Background())
-	defer phase.Close(p0)
-
-	ctx := context.WithValue(p0, &t, "this just sets an intermediary context")
-
-	phase.Cancel(ctx)
+	p0.Cancel()
 	select {
 	case <-p0.Done():
 		t.Log("Waited for done and found it")
