@@ -41,7 +41,9 @@ func ExamplePhaser_orderedShutdown() {
 		fmt.Println(message)
 	}
 
-	phaser, _ := phase.Next(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+
+	phaser, _ := phase.Next(ctx)
 	defer phaser.Close()
 
 	p0, _ := phase.Next(phaser)
@@ -55,7 +57,7 @@ func ExamplePhaser_orderedShutdown() {
 	// We expect contexts to end in order: p2, p1, p0.
 
 	// Cancel Phaser chain
-	phaser.Cancel()
+	cancel()
 	phaser.WaitForChildren()
 	fmt.Println("finished!")
 	// Output: p2 ended
@@ -103,7 +105,8 @@ func ExamplePhaser_funcTree() {
 
 func ExamplePhaser_contexts() {
 	// Create a top lever phaser which will be cancelled at end of main.
-	p0, _ := phase.Next(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	p0, _ := phase.Next(ctx)
 	defer p0.Close()
 
 	go func(ctx context.Context) {
@@ -141,7 +144,7 @@ func ExamplePhaser_contexts() {
 
 	fmt.Println("Shutdown in 5 seconds")
 	time.Sleep(5 * time.Second)
-	p0.Cancel()
+	cancel()
 	fmt.Println("Waiting on children")
 	p0.WaitForChildren() // Wait until everything has finished.
 	fmt.Println("Bye!")
@@ -163,7 +166,8 @@ func ExamplePhaser_phaserDI() {
 	}
 
 	// Create a top level phase which will be cancelled at end of main.
-	p0, _ := phase.Next(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	p0, _ := phase.Next(ctx)
 	defer p0.Close()
 
 	// Create a tree of phasers from the root and use dependency injection to pass it
@@ -181,7 +185,7 @@ func ExamplePhaser_phaserDI() {
 	time.Sleep(2 * time.Second)
 
 	// Cancel this context, which cascades down.
-	p0.Cancel()
+	cancel()
 	// Wait until everything has finished.
 	p0.WaitForChildren()
 	fmt.Println("Bye!")

@@ -31,18 +31,12 @@ func assertContextFinished(t *testing.T, ctx context.Context) {
 func TestPhaseCloseOne(t *testing.T) {
 	t.Parallel()
 
-	p, _ := phase.Next(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	p, _ := phase.Next(ctx)
+	cancel()
 	p.WaitForChildren()
 	p.Close()
 	assert.Error(t, p.Err(), "expect context to return error")
-}
-
-func TestPhaseCancel(t *testing.T) {
-	t.Parallel()
-
-	p, _ := phase.Next(context.Background())
-	p.Cancel()
-	assert.NotPanics(t, func() { p.Cancel() }, "additional calls to cancel do not cause panic")
 }
 
 func TestDeadlineInParent(t *testing.T) {
@@ -275,22 +269,6 @@ func TestPhaserContextCancelPropagatesToPhaser(t *testing.T) {
 	defer p0.Close()
 
 	cancel()
-	select {
-	case <-p0.Done():
-		t.Log("Waited for done and found it")
-	default:
-		t.Error("Expected Cancel to terminate phaser context")
-	}
-	assert.Error(t, p0.Err(), "Expected non nil error after cancellation")
-}
-
-func TestPhaserSelfCancel(t *testing.T) {
-	t.Parallel()
-
-	p0, _ := phase.Next(context.Background())
-	defer p0.Close()
-
-	p0.Cancel()
 	select {
 	case <-p0.Done():
 		t.Log("Waited for done and found it")

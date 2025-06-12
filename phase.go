@@ -93,17 +93,12 @@ import (
 // It returns a new Phaser, which implements context.Context.
 //
 // Calling Next is the starting point for phase coordination.
-func Next(parent context.Context) (phaser *phaseCtx, err error) {
-	ctx, cancel := context.WithCancel(parent)
+func Next(ctx context.Context) (phaser *phaseCtx, err error) {
 	p := &phaseCtx{
-		Context:    ctx,
-		cancelFunc: cancel,
+		Context: ctx,
 	}
 
-	p.debug("calling init")
-	err = p.init(ctx)
-
-	if err != nil {
+	if err = p.init(ctx); err != nil {
 		return nil, err
 	}
 
@@ -116,7 +111,6 @@ func Next(parent context.Context) (phaser *phaseCtx, err error) {
 // properly terminated before the phase itself is considered closed.
 type Phaser interface {
 	context.Context
-	Cancel()
 	Close()
 	WaitForChildren()
 }
@@ -127,7 +121,6 @@ var _ context.Context = (*phaseCtx)(nil)
 
 type phaseCtx struct {
 	context.Context
-	cancelFunc context.CancelFunc
 	// parent is the nearest ancestor phaseCtx.
 	parent *phaseCtx
 
@@ -184,15 +177,7 @@ func (p *phaseCtx) debug(_ string) {
 	// fmt.Printf("%p: %s\n", p, message)
 }
 
-func (p *phaseCtx) Cancel() {
-	p.cancelFunc()
-}
-
 func (p *phaseCtx) Close() {
-	// Always call cancel in case it has not been called already, to close our internal context.
-	// This is the case when the context ends due to propagated context cancelation.
-	p.cancelFunc()
-
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
