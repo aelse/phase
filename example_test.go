@@ -19,7 +19,7 @@ func ExamplePhaser() {
 		}
 		// Wait until child phases end.
 		// There are none in this example but we demonstrate correct behaviour.
-		next.WaitForChildren()
+		<-next.ChildrenDone()
 		// Signal that our phase has ended.
 		next.Close()
 	}
@@ -37,7 +37,7 @@ func ExamplePhaser_orderedShutdown() {
 	f := func(p phase.Phaser, message string) {
 		defer p.Close()
 		<-p.Done()
-		p.WaitForChildren()
+		<-p.ChildrenDone()
 		fmt.Println(message)
 	}
 
@@ -58,7 +58,7 @@ func ExamplePhaser_orderedShutdown() {
 
 	// Cancel Phaser chain
 	cancel()
-	phaser.WaitForChildren()
+	<-phaser.ChildrenDone()
 	fmt.Println("finished!")
 	// Output: p2 ended
 	// p1 ended
@@ -91,7 +91,7 @@ func ExamplePhaser_funcTree() {
 		fmt.Printf("func<%d> doing work, waiting for context end\n", i)
 		<-p.Done()
 		// Child phases must return first
-		p.WaitForChildren()
+		<-p.ChildrenDone()
 		fmt.Printf("func<%d> returning\n", i)
 	}
 
@@ -99,7 +99,7 @@ func ExamplePhaser_funcTree() {
 	// Top level context timeout propagates down and we wait on the phaser.
 	<-ctx.Done()
 	fmt.Println("Waiting on top level phaser to complete")
-	phaser.WaitForChildren()
+	<-phaser.ChildrenDone()
 	fmt.Println("Top level phaser ended. Bye!")
 }
 
@@ -133,7 +133,7 @@ func ExamplePhaser_contexts() {
 		<-ctx.Done()
 
 		fmt.Println("Waiting for descendent phases to end (none in this example)")
-		p1.WaitForChildren()
+		<-p1.ChildrenDone()
 
 		// There is no guarantee on order of completion for the goroutines
 		// as they only deal in contexts not Phasers. I can try to manage this
@@ -146,7 +146,7 @@ func ExamplePhaser_contexts() {
 	time.Sleep(5 * time.Second)
 	cancel()
 	fmt.Println("Waiting on children")
-	p0.WaitForChildren() // Wait until everything has finished.
+	<-p0.ChildrenDone() // Wait until everything has finished.
 	fmt.Println("Bye!")
 }
 
@@ -160,7 +160,7 @@ func ExamplePhaser_phaserDI() {
 		fmt.Printf("%s started\n", name)
 		<-phaser.Done()
 		// There might be child phases, so call Wait
-		phaser.WaitForChildren()
+		<-phaser.ChildrenDone()
 		fmt.Printf("%s shutting down\n", name)
 		time.Sleep(time.Second)
 	}
@@ -187,6 +187,6 @@ func ExamplePhaser_phaserDI() {
 	// Cancel this context, which cascades down.
 	cancel()
 	// Wait until everything has finished.
-	p0.WaitForChildren()
+	<-p0.ChildrenDone()
 	fmt.Println("Bye!")
 }

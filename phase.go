@@ -111,8 +111,8 @@ func Next(ctx context.Context) (phaser *phaseCtx, err error) {
 // properly terminated before the phase itself is considered closed.
 type Phaser interface {
 	context.Context
+	ChildrenDone() <-chan struct{}
 	Close()
-	WaitForChildren()
 }
 
 // phaseCtx meets Phaser and context.Context interfaces.
@@ -127,6 +127,7 @@ type phaseCtx struct {
 	mu        sync.Mutex
 	children  sync.WaitGroup
 	beganWait bool
+	chldDone  chan struct{}
 }
 
 func (p *phaseCtx) init(ctx context.Context) error {
@@ -189,15 +190,21 @@ func (p *phaseCtx) Close() {
 	}
 }
 
-func (p *phaseCtx) WaitForChildren() {
-	// Mark that we have begun waiting and can no longer have children added.
+func (p *phaseCtx) ChildrenDone() <-chan struct{} {
 	p.mu.Lock()
-	p.beganWait = true
+	if !p.beganWait {
+		// Mark that we have begun waiting and can no longer have children added.
+		p.beganWait = true
+		p.chldDone = make(chan struct{})
+		go func() {
+			p.debug("waiting on children")
+			p.children.Wait()
+			p.debug("finished waiting on children")
+			close(p.chldDone)
+		}()
+	}
 	p.mu.Unlock()
-
-	p.debug("waiting on children")
-	p.children.Wait()
-	p.debug("finished waiting on children")
+	return p.chldDone
 }
 
 func (p *phaseCtx) Value(key any) any {

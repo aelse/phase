@@ -34,7 +34,7 @@ func TestPhaseCloseOne(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	p, _ := phase.Next(ctx)
 	cancel()
-	p.WaitForChildren()
+	<-p.ChildrenDone()
 	p.Close()
 	assert.Error(t, p.Err(), "expect context to return error")
 }
@@ -84,7 +84,7 @@ func TestPhaseCancelParent(t *testing.T) {
 	// Child is responsible for calling Done when its context ends.
 	go func() {
 		<-p1.Done()
-		p1.WaitForChildren()
+		<-p1.ChildrenDone()
 		p1.Close()
 	}()
 
@@ -115,7 +115,7 @@ func TestPhaseCancelHeirarchy(t *testing.T) {
 
 		go func(p phase.Phaser) {
 			<-p.Done()
-			p.WaitForChildren()
+			<-p.ChildrenDone()
 			p.Close()
 		}(p)
 	}
@@ -159,7 +159,7 @@ func TestPhaseChainedCancel(t *testing.T) {
 			<-p.Done()
 			// If the context ends we wait on children
 			t.Logf("%d: waiting on children", i)
-			p.WaitForChildren()
+			<-p.ChildrenDone()
 			// and then signal parent we're done
 			t.Logf("%d: signal parent", i)
 			p.Close()
@@ -187,7 +187,7 @@ func TestPhaseCancelCascade(t *testing.T) {
 	p0, _ := phase.Next(ctx)
 	go func() {
 		<-p0.Done()
-		p0.WaitForChildren()
+		<-p0.ChildrenDone()
 		results <- "p0"
 
 		p0.Close()
@@ -198,7 +198,7 @@ func TestPhaseCancelCascade(t *testing.T) {
 		<-p1.Done()
 		// Parent Phaser's context should not end until we send a notification via Cancel()
 		time.Sleep(10 * time.Millisecond)
-		p1.WaitForChildren()
+		<-p1.ChildrenDone()
 		results <- "p1"
 
 		p1.Close()
