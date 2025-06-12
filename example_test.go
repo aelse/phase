@@ -106,6 +106,7 @@ func ExamplePhaser_funcTree() {
 func ExamplePhaser_contexts() {
 	// Create a top lever phaser which will be cancelled at end of main.
 	ctx, cancel := context.WithCancel(context.Background())
+
 	p0, _ := phase.Next(ctx)
 	defer p0.Close()
 
@@ -167,6 +168,7 @@ func ExamplePhaser_phaserDI() {
 
 	// Create a top level phase which will be cancelled at end of main.
 	ctx, cancel := context.WithCancel(context.Background())
+
 	p0, _ := phase.Next(ctx)
 	defer p0.Close()
 

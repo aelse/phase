@@ -108,6 +108,8 @@ type phaseCtx struct {
 	chldDone  chan struct{}
 }
 
+var errParentWaitingOnChildren = errors.New("parent phaser is waiting on children")
+
 func (p *phaseCtx) init(ctx context.Context) error {
 	parent := ancestorPhaseCtx(ctx)
 	if parent == nil {
@@ -119,7 +121,8 @@ func (p *phaseCtx) init(ctx context.Context) error {
 	parent.mu.Lock()
 	if parent.beganWait {
 		parent.mu.Unlock()
-		return errors.New("parent phaser is waiting on children")
+
+		return errParentWaitingOnChildren
 	}
 
 	parent.registerChild(p)
@@ -172,6 +175,7 @@ func (p *phaseCtx) ChildrenDone() <-chan struct{} {
 	p.mu.Lock()
 	p.initChldDone()
 	p.mu.Unlock()
+
 	return p.chldDone
 }
 
@@ -182,6 +186,7 @@ func (p *phaseCtx) initChldDone() {
 	if !p.beganWait {
 		p.beganWait = true
 		p.chldDone = make(chan struct{})
+
 		go func() {
 			p.children.Wait()
 			close(p.chldDone)

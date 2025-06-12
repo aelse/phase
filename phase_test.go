@@ -33,8 +33,10 @@ func TestPhaseCloseOne(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	p, _ := phase.Next(ctx)
+
 	cancel()
 	<-p.ChildrenDone()
+
 	p.Close()
 	assert.Error(t, p.Err(), "expect context to return error")
 }
@@ -59,6 +61,7 @@ func TestPhaseCancelChild(t *testing.T) {
 	defer p0.Close() // cleanup
 
 	ctx, cancel := context.WithCancel(p0)
+
 	p1, _ := phase.Next(ctx)
 	defer p1.Close()
 
