@@ -60,6 +60,7 @@ func TestPhaseCancelChild(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(p0)
 	p1, _ := phase.Next(ctx)
+	defer p1.Close()
 
 	// Cancel child context
 	cancel()

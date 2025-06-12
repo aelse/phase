@@ -172,6 +172,14 @@ func ancestorPhaseCtx(ctx context.Context) *phaseCtx {
 }
 
 func (p *phaseCtx) Close() {
+	// We only close once children have terminated.
+	// We need to ensure no more children are created.
+	p.mu.Lock()
+	p.initChldDone()
+	// Children need the mutex to deregister.
+	p.mu.Unlock()
+	p.children.Wait()
+
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -184,8 +192,16 @@ func (p *phaseCtx) Close() {
 
 func (p *phaseCtx) ChildrenDone() <-chan struct{} {
 	p.mu.Lock()
+	p.initChldDone()
+	p.mu.Unlock()
+	return p.chldDone
+}
+
+// initChldDone marks that we have begun waiting on children, and creates a channel
+// which is closed once no child phases remain.
+// Must only be called when holding the mutex.
+func (p *phaseCtx) initChldDone() {
 	if !p.beganWait {
-		// Mark that we have begun waiting and can no longer have children added.
 		p.beganWait = true
 		p.chldDone = make(chan struct{})
 		go func() {
@@ -193,8 +209,6 @@ func (p *phaseCtx) ChildrenDone() <-chan struct{} {
 			close(p.chldDone)
 		}()
 	}
-	p.mu.Unlock()
-	return p.chldDone
 }
 
 func (p *phaseCtx) Value(key any) any {
