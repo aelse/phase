@@ -144,11 +144,9 @@ func (p *phaseCtx) init(ctx context.Context) error {
 		return errors.New("parent phaser is waiting on children")
 	}
 
-	p.debug("adding self to parent's children")
 	parent.registerChild(p)
 	parent.mu.Unlock()
 	p.parent = parent
-	p.debug("unlocked parent")
 
 	return nil
 }
@@ -156,7 +154,6 @@ func (p *phaseCtx) init(ctx context.Context) error {
 // registerChild adds a child for ordered cancellation.
 // May only be called when holding the mutex.
 func (p *phaseCtx) registerChild(_ *phaseCtx) {
-	p.debug("registering child")
 	p.children.Add(1)
 }
 
@@ -174,16 +171,11 @@ func ancestorPhaseCtx(ctx context.Context) *phaseCtx {
 	return nil
 }
 
-func (p *phaseCtx) debug(_ string) {
-	// fmt.Printf("%p: %s\n", p, message)
-}
-
 func (p *phaseCtx) Close() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	if p.parent != nil {
-		p.debug("telling parent")
 		p.parent.children.Done()
 		// We must only do this once, so remove parent.
 		p.parent = nil
@@ -197,9 +189,7 @@ func (p *phaseCtx) ChildrenDone() <-chan struct{} {
 		p.beganWait = true
 		p.chldDone = make(chan struct{})
 		go func() {
-			p.debug("waiting on children")
 			p.children.Wait()
-			p.debug("finished waiting on children")
 			close(p.chldDone)
 		}()
 	}
