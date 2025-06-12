@@ -8,23 +8,17 @@
 // should clean up and return.
 //
 // The owner of a `Phaser` is responsible for coordinating its shutdown.
-// This includes ensuring all child phases have completed before calling `phase.Close`.
+// This means waiting on child phases to terminate then calling `phaser.Close`.
 //
-// A phase ends under either of the following conditions:
-//   - its context is canceled (e.g., via `<-p.Done()`)
-//   - `phase.Cancel(p)` is called explicitly
+// A phase ends when both of the following conditions are met:
+//   - its context is canceled (as for other contexts, `<-p.Done()`)
+//   - it has no remaining children (similar to above, `<-p.ChildrenDone()`)
 //
-// In either case, before closing the phase, you **must** call `phase.Wait(p)`
-// to ensure all child phases have completed.
+// Once the phase has ended a function may perform any necessary cleanup and then call `p.Close()`
+// to signal its own termination to a parent phase.
 //
-// The following methods accept any `context.Context` as input:
-//   - `phase.Next`
-//   - `phase.Cancel`
-//   - `phase.Close`
-//   - `phase.Wait`
-//
-// These functions will automatically locate the nearest `Phaser` in the context
-// chain. If none is found, the call panics, indicating a programming error.
+// Phase is able to discover parent phases through the context chain, even if intermediate code
+// is not Phase aware. This means you can safely mix packages which do or don't support phases.
 //
 // # Example
 //
@@ -33,7 +27,7 @@
 //		defer cancel()
 //
 //		ctx = phase.Next(ctx)
-//		defer phase.Close(ctx) // Ensure the phase ends
+//		defer ctx.Close() // Ensure the phase ends
 //
 //		select {
 //		case <-ctx.Done():
@@ -43,44 +37,29 @@
 //		}
 //
 //		// Wait for any child phases before returning
-//		phase.Wait(ctx)
+//		<-ctx.ChildrenDone()
 //	}
 //
 // # Phase Lifecycle
 //
-// A phase is created by calling `phase.Next(ctx)`, which returns a new context
-// associated with the phase.
+// A phase is created by calling `phase.Next(ctx)`, which returns a Phaser context
+// and an error value. A non-nil error indicates the phase cannot be started and
+// the function should terminate. This can occur if the parent phase is waiting on
+// children at the time the caller is attempting to create a new phase.
 //
-// That context can be passed freely to downstream functions. If those functions
-// create their own phases using the same context, they will register as child phases
+// The Phaser context can be passed freely to downstream functions as with any other
+// `context.Context`. Additional phases created will register as child phases
 // of the nearest ancestor `Phaser`.
 //
-// A phase typically ends in response to one of:
-//  1. a call to `phase.Cancel(ctx)`
-//  2. cancellation of the parent context
+// A phase ends with cancellation of the parent context. In this state the owning func
+// should wait on its children to terminate, perform cleanup and then Close the Phaser.
 //
-// Upon termination, the following occurs:
-//  1. cancellation is propagated to all child phases
-//  2. the phase waits for all children to complete
-//  3. the phase marks its own context as done
+// In order, the following occurs:
+//  1. context cancellation is propagated immediately to all child phases
+//  2. the phase owner waits for all children to complete
+//  3. the phase owner marks its own phase as done, and returns
 //
-// The function owning the phase can use this opportunity to perform final cleanup
-// before calling `phase.Close`, usually via a deferred call.
-//
-// ## A note on phase ownership
-//
-// A function may begin a phase to cover the scope of its own activities, or to
-// hand off to another function. In the simple case where a function begins a phase
-// for itself (ensuring function fully terminates before parent phases end) it is
-// clear that the programmer must Close the phase before returning.
-//
-// When orchestrating the start of an application you
-// may wish to create a number of phases and pass the relevant context to your
-// application components (dependency injection) with the expectation the components
-// will Close their phase before returning. If these phases are passed to those
-// functions as a context.Context the requirement may be overlooked and so it
-// is preferable to make the first argument to those functions a phase.Phaser
-// to indicate the requirement and avoid confusion.
+// The call to `phase.Close` is usually a deferred call.
 package phase
 
 import (
@@ -106,8 +85,7 @@ func Next(ctx context.Context) (phaser *phaseCtx, err error) {
 }
 
 // A Phaser is a context.Context that participates in coordinated shutdown.
-//
-// A Phaser tracks child phases created via Next, and ensures they are all
+// It tracks child phases created via Next, and ensures they are all
 // properly terminated before the phase itself is considered closed.
 type Phaser interface {
 	context.Context
