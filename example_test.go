@@ -10,7 +10,7 @@ import (
 
 func ExamplePhaser() {
 	f := func(ctx context.Context) {
-		next := phase.Next(ctx)
+		next, _ := phase.Next(ctx)
 		select {
 		case <-next.Done():
 			fmt.Println("context ended")
@@ -41,12 +41,12 @@ func ExamplePhaser_orderedShutdown() {
 		fmt.Println(message)
 	}
 
-	phaser := phase.Next(context.Background())
+	phaser, _ := phase.Next(context.Background())
 	defer phase.Close(phaser)
 
-	p0 := phase.Next(phaser)
-	p1 := phase.Next(p0)
-	p2 := phase.Next(p1)
+	p0, _ := phase.Next(phaser)
+	p1, _ := phase.Next(p0)
+	p2, _ := phase.Next(p1)
 
 	go f(p0, "p0 ended")
 	go f(p1, "p1 ended")
@@ -68,7 +68,7 @@ func ExamplePhaser_funcTree() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	phaser := phase.Next(ctx)
+	phaser, _ := phase.Next(ctx)
 	defer phase.Close(phaser)
 
 	type recursiveFunc func(f recursiveFunc, ctx context.Context, i, depth int)
@@ -78,7 +78,7 @@ func ExamplePhaser_funcTree() {
 			return
 		}
 		// Create a phase to cover this function scope, and defer Close.
-		p := phase.Next(ctx)
+		p, _ := phase.Next(ctx)
 		defer phase.Close(p)
 
 		// Create child funcs up to depth.
@@ -103,13 +103,13 @@ func ExamplePhaser_funcTree() {
 
 func ExamplePhaser_contexts() {
 	// Create a top lever phaser which will be cancelled at end of main.
-	p0 := phase.Next(context.Background())
+	p0, _ := phase.Next(context.Background())
 	defer phase.Close(p0)
 
 	go func(ctx context.Context) {
 		fmt.Println("started p0 func")
 
-		p1 := phase.Next(ctx)
+		p1, _ := phase.Next(ctx)
 		defer phase.Close(p1)
 
 		type ctxStr string
@@ -163,18 +163,18 @@ func ExamplePhaser_phaserDI() {
 	}
 
 	// Create a top level phase which will be cancelled at end of main.
-	p0 := phase.Next(context.Background())
+	p0, _ := phase.Next(context.Background())
 	defer phase.Close(p0)
 
 	// Create a tree of phasers from the root and use dependency injection to pass it
 	// to each component.
-	p1 := phase.Next(p0)
+	p1, _ := phase.Next(p0)
 	go component(p1, "db")
 
-	p2 := phase.Next(p1)
+	p2, _ := phase.Next(p1)
 	go component(p2, "data pipeline")
 
-	p3 := phase.Next(p2)
+	p3, _ := phase.Next(p2)
 	go component(p3, "web server")
 
 	fmt.Println("Shutdown in 2 seconds")

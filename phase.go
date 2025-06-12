@@ -2,8 +2,10 @@
 // of subsystems in a deterministic, hierarchical order.
 //
 // A phase begins with a call to `phase.Next`, which takes a parent context and
-// returns a `Phaser`. A `Phaser` implements `context.Context` and can be used
-// anywhere a standard context is expected.
+// returns a `Phaser` and `error`.
+// A `Phaser` implements `context.Context` and can be used anywhere a standard context is expected.
+// If a non-nil error is returned the parent context or phase has ended. The function
+// should clean up and return.
 //
 // The owner of a `Phaser` is responsible for coordinating its shutdown.
 // This includes ensuring all child phases have completed before calling `phase.Close`.
@@ -83,6 +85,7 @@ package phase
 
 import (
 	"context"
+	"fmt"
 	"sync"
 )
 
@@ -90,16 +93,21 @@ import (
 // It returns a new Phaser, which implements context.Context.
 //
 // Calling Next is the starting point for phase coordination.
-func Next(parent context.Context) (phaser *phaseCtx) {
+func Next(parent context.Context) (phaser *phaseCtx, err error) {
 	ctx, cancel := context.WithCancel(parent)
 	p := &phaseCtx{
 		Context:    ctx,
 		cancelFunc: cancel,
 	}
-	p.debug("calling init")
-	p.init(ctx)
 
-	return p
+	p.debug("calling init")
+	err = p.init(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return p, nil
 }
 
 // Cancel signals that the phase identified by the given context should end.
@@ -167,7 +175,7 @@ type phaseCtx struct {
 	children sync.WaitGroup
 }
 
-func (p *phaseCtx) init(ctx context.Context) {
+func (p *phaseCtx) init(ctx context.Context) error {
 	// Keep parent context which we need for calls to Value, and tell func for notifying
 	// parent phaseCtx when we terminate. We call TryLock to try to avoid lengthy blocking
 	// if the parent is being cancelled.
@@ -178,14 +186,21 @@ func (p *phaseCtx) init(ctx context.Context) {
 		// The cancellation from the ancestor may not propagate if an intermediary context has prevented it.
 		// eg. using context.WithoutCancel. That's out of our hands.
 		parent.mu.Lock()
-		if parent.Err() == nil {
-			p.debug("adding self to parent's children")
-			parent.registerChild(p)
+		if parent.Err() != nil {
+			p.debug("parent context is cancelled")
+			parent.mu.Unlock()
+
+			return fmt.Errorf("parent context error: %w", parent.Err())
 		}
+
+		p.debug("adding self to parent's children")
+		parent.registerChild(p)
 		parent.mu.Unlock()
 		p.parent = parent
 		p.debug("unlocked parent")
 	}
+
+	return nil
 }
 
 // registerChild adds a child for ordered cancellation.

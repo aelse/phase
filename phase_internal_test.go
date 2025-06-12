@@ -10,7 +10,7 @@ import (
 func TestPhaserValueAncestor(t *testing.T) {
 	t.Parallel()
 
-	p0 := Next(context.Background())
+	p0, _ := Next(context.Background())
 	defer Close(p0)
 
 	ctx := context.WithValue(p0, &t, "this just sets an intermediary context")
