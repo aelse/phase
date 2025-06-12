@@ -162,7 +162,7 @@ func TestPhaseChainedCancel(t *testing.T) {
 
 		go func(p phase.Phaser, i int) {
 			t.Logf("%d: waiting on context cancellation", i)
-			<-ctx.Done()
+			<-p.Done()
 			// If the context ends we wait on children
 			t.Logf("%d: waiting on children", i)
 			p.WaitForChildren()
