@@ -85,7 +85,7 @@ package phase
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"sync"
 )
 
@@ -110,7 +110,7 @@ func Next(parent context.Context) (phaser *phaseCtx, err error) {
 	return p, nil
 }
 
-// A Phaser is a context.Context that participates in coordinated phase shutdown.
+// A Phaser is a context.Context that participates in coordinated shutdown.
 //
 // A Phaser tracks child phases created via Next, and ensures they are all
 // properly terminated before the phase itself is considered closed.
@@ -131,34 +131,30 @@ type phaseCtx struct {
 	// parent is the nearest ancestor phaseCtx.
 	parent *phaseCtx
 
-	mu       sync.Mutex
-	children sync.WaitGroup
+	mu        sync.Mutex
+	children  sync.WaitGroup
+	beganWait bool
 }
 
 func (p *phaseCtx) init(ctx context.Context) error {
-	// Keep parent context which we need for calls to Value, and tell func for notifying
-	// parent phaseCtx when we terminate. We call TryLock to try to avoid lengthy blocking
-	// if the parent is being cancelled.
-	if parent := ancestorPhaseCtx(ctx); parent != nil {
-		// If the parent has already propagated cancellation to children we do not register with it.
-		// That cancellation *should* trickle down through any intermediary contexts here, and the user
-		// of this context will see the results in calling Done() or Err() on us.
-		// The cancellation from the ancestor may not propagate if an intermediary context has prevented it.
-		// eg. using context.WithoutCancel. That's out of our hands.
-		parent.mu.Lock()
-		if parent.Err() != nil {
-			p.debug("parent context is cancelled")
-			parent.mu.Unlock()
-
-			return fmt.Errorf("parent context error: %w", parent.Err())
-		}
-
-		p.debug("adding self to parent's children")
-		parent.registerChild(p)
-		parent.mu.Unlock()
-		p.parent = parent
-		p.debug("unlocked parent")
+	parent := ancestorPhaseCtx(ctx)
+	if parent == nil {
+		return nil
 	}
+
+	// If the parent is already waiting for children to terminate we do not register with it.
+	// We do not rely on parent.Err() since it may end at any time outside of phaser control.
+	parent.mu.Lock()
+	if parent.beganWait {
+		parent.mu.Unlock()
+		return errors.New("parent phaser is waiting on children")
+	}
+
+	p.debug("adding self to parent's children")
+	parent.registerChild(p)
+	parent.mu.Unlock()
+	p.parent = parent
+	p.debug("unlocked parent")
 
 	return nil
 }
@@ -166,12 +162,6 @@ func (p *phaseCtx) init(ctx context.Context) error {
 // registerChild adds a child for ordered cancellation.
 // May only be called when holding the mutex.
 func (p *phaseCtx) registerChild(_ *phaseCtx) {
-	if p.Err() != nil {
-		p.debug("skipping registration")
-
-		return
-	}
-
 	p.debug("registering child")
 	p.children.Add(1)
 }
@@ -209,11 +199,17 @@ func (p *phaseCtx) Close() {
 	if p.parent != nil {
 		p.debug("telling parent")
 		p.parent.children.Done()
+		// We must only do this once, so remove parent.
 		p.parent = nil
 	}
 }
 
 func (p *phaseCtx) WaitForChildren() {
+	// Mark that we have begun waiting and can no longer have children added.
+	p.mu.Lock()
+	p.beganWait = true
+	p.mu.Unlock()
+
 	p.debug("waiting on children")
 	p.children.Wait()
 	p.debug("finished waiting on children")
